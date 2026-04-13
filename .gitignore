@@ -1,5 +1,27 @@
-﻿node_modules
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+.vercel/
+
+# Environment variables
 .env
-.next
-dist
-build
+.env.local
+.env.*.local
+*.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Settings
+.vscode/

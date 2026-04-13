@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import io from "socket.io-client";
+import Pusher from "pusher-js";
 import TaskForm from "../components/TaskForm";
 import TaskList from "../components/TaskList";
 import Navbar from "../components/Navbar";
@@ -71,16 +71,21 @@ export default function Home() {
 
   useEffect(() => {
     fetchTasks();
-    const newSocket = io(API_URL);
     
-    newSocket.on("taskUpdated", fetchTasks);
-    newSocket.on("notification", (notif) => {
-      setNotifications(prev => [notif, ...prev].slice(0, 10));
+    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY, {
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
     });
-    
+
+    const channel = pusher.subscribe("tasks");
+
+    channel.bind("taskUpdated", fetchTasks);
+    channel.bind("notification", (notif) => {
+      setNotifications((prev) => [notif, ...prev].slice(0, 10));
+    });
+
     return () => {
-      newSocket.off("taskUpdated");
-      newSocket.close();
+      channel.unbind_all();
+      channel.unsubscribe();
     };
   }, [fetchTasks]);
 

@@ -3,24 +3,33 @@ require('dotenv').config(); // MUST be first
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
+const Pusher = require('pusher');
 
 const app = express();
-const server = http.createServer(app);
+
+const pusher = new Pusher({
+  appId: process.env.PUSHER_APP_ID,
+  key: process.env.PUSHER_KEY,
+  secret: process.env.PUSHER_SECRET,
+  cluster: process.env.PUSHER_CLUSTER,
+  useTLS: true
+});
 
 // Use CLIENT_URL from env, fallback to localhost for development
 const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
 
-const io = new Server(server, { 
-  cors: { 
-    origin: clientUrl,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"]
-  } 
-});
-
 app.use(cors({ origin: clientUrl }));
 app.use(express.json());
+
+// Error handling for malformed JSON
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error(`Malformed JSON request received at ${req.url} ❌`);
+    return res.status(400).json({ error: "Invalid JSON format" });
+  }
+  next(err);
+});
+
 
 // Task Schema
 const taskSchema = new mongoose.Schema({
@@ -49,13 +58,15 @@ const notificationSchema = new mongoose.Schema({
 const Notification = mongoose.model('Notification', notificationSchema);
 
 // API Endpoints
-app.get('/tasks', async (req, res) => {
+const apiRouter = express.Router();
+
+apiRouter.get('/tasks', async (req, res) => {
   const tasks = await Task.find();
   res.json(tasks);
 });
 
 // Shared tasks endpoint
-app.get('/tasks/shared', async (req, res) => {
+apiRouter.get('/tasks/shared', async (req, res) => {
   const { email } = req.query;
   if (!email) return res.status(400).json({ error: "Email is required" });
   try {
@@ -66,12 +77,12 @@ app.get('/tasks/shared', async (req, res) => {
   }
 });
 
-app.post('/tasks', async (req, res) => {
+apiRouter.post('/tasks', async (req, res) => {
   const task = await Task.create(req.body);
   res.status(201).json(task);
 });
 
-app.put('/tasks/:id', async (req, res) => {
+apiRouter.put('/tasks/:id', async (req, res) => {
   try {
     const task = await Task.findByIdAndUpdate(
       req.params.id,
@@ -85,8 +96,8 @@ app.put('/tasks/:id', async (req, res) => {
         taskId: task._id,
         type: 'update'
       });
-      io.emit('notification', notification);
-      io.emit('taskUpdated', task);
+      pusher.trigger('tasks', 'notification', notification);
+      pusher.trigger('tasks', 'taskUpdated', task);
     }
     res.json(task);
   } catch (err) {
@@ -95,7 +106,7 @@ app.put('/tasks/:id', async (req, res) => {
 });
 
 // Share task endpoint
-app.put('/tasks/:id/share', async (req, res) => {
+apiRouter.put('/tasks/:id/share', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: "Email is required" });
   try {
@@ -113,8 +124,8 @@ app.put('/tasks/:id/share', async (req, res) => {
       type: 'share'
     });
     
-    io.emit('notification', notification);
-    io.emit('taskUpdated', task);
+    pusher.trigger('tasks', 'notification', notification);
+    pusher.trigger('tasks', 'taskUpdated', task);
     res.json(task);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -122,7 +133,7 @@ app.put('/tasks/:id/share', async (req, res) => {
 });
 
 // Notification Endpoints
-app.get('/notifications', async (req, res) => {
+apiRouter.get('/notifications', async (req, res) => {
   try {
     const notifications = await Notification.find().sort({ createdAt: -1 }).limit(10);
     res.json(notifications);
@@ -131,7 +142,7 @@ app.get('/notifications', async (req, res) => {
   }
 });
 
-app.patch('/notifications/:id/read', async (req, res) => {
+apiRouter.patch('/notifications/:id/read', async (req, res) => {
   try {
     const notification = await Notification.findByIdAndUpdate(req.params.id, { read: true }, { new: true });
     res.json(notification);
@@ -140,13 +151,13 @@ app.patch('/notifications/:id/read', async (req, res) => {
   }
 });
 
-app.delete('/tasks/:id', async (req, res) => {
+apiRouter.delete('/tasks/:id', async (req, res) => {
   await Task.findByIdAndDelete(req.params.id);
   res.json({ message: "Deleted" });
 });
 
 // Analytics
-app.get('/analytics/overview', async (req, res) => {
+apiRouter.get('/analytics/overview', async (req, res) => {
   try {
     const counts = await Task.aggregate([
       { $group: { _id: "$status", count: { $sum: 1 } } }
@@ -174,7 +185,7 @@ app.get('/analytics/overview', async (req, res) => {
   }
 });
 
-app.get('/analytics/trends', async (req, res) => {
+apiRouter.get('/analytics/trends', async (req, res) => {
   try {
     const trends = await Task.aggregate([
       { $match: { status: "Completed" } },
@@ -195,6 +206,9 @@ app.get('/analytics/trends', async (req, res) => {
   }
 });
 
+// Apply the /api prefix to all routes
+app.use('/api', apiRouter);
+
 // MongoDB connection + server start
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -206,11 +220,14 @@ if (!MONGO_URI) {
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log("MongoDB connected ✅");
-    const PORT = process.env.PORT || 8000;
-    server.listen(PORT, () => {
-      console.log(`Server running on port ${PORT} 🚀`);
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      const PORT = process.env.PORT || 8000;
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT} 🚀`);
+      });
+    }
   })
   .catch(err => {
     console.error("MongoDB connection error ❌", err);
   });
+module.exports = app;

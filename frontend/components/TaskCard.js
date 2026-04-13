@@ -20,7 +20,13 @@ export default function TaskCard({ task, fetchTasks, onEdit }) {
   const handleToggleStatus = async () => {
     const newStatus = task.status === "Completed" ? "Pending" : task.status === "Pending" ? "In Progress" : "Completed";
     try {
-      await axios.put(`${API_URL}/tasks/${task._id}`, { ...task, status: newStatus });
+      await axios.put(`${API_URL}/tasks/${task._id}`, { 
+        title: task.title,
+        description: task.description,
+        status: newStatus,
+        dueDate: task.dueDate
+      });
+
       fetchTasks();
     } catch (err) {
       console.error(err);
