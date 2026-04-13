@@ -7,7 +7,7 @@
     "backend"
   ],
   "scripts": {
-    "build": "cd frontend && npm run build",
+    "build-local": "cd frontend && npm run build",
     "install-all": "npm install"
   }
 }
