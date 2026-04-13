@@ -8,11 +8,13 @@ build/
 out/
 .vercel/
 
-# Environment variables
+# Environment variables (local only, never commit secrets)
 .env
 .env.local
 .env.*.local
+/frontend/.env.production
 *.env
+# Note: .env.production is intentionally NOT ignored (contains no secrets)
 
 # Logs
 npm-debug.log*
