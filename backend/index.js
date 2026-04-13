@@ -15,11 +15,29 @@ const pusher = new Pusher({
   useTLS: true
 });
 
-// Use CLIENT_URL from env, fallback to localhost for development
-const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+// Allow both local and production origins
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  process.env.CLIENT_URL,
+].filter(Boolean);
 
-app.use(cors({ origin: clientUrl }));
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
+  credentials: true
+}));
 app.use(express.json());
+
+// Request logger to debug 404s
+app.use((req, res, next) => {
+  console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url} 📥`);
+  next();
+});
 
 // Error handling for malformed JSON
 app.use((err, req, res, next) => {
@@ -209,6 +227,12 @@ apiRouter.get('/analytics/trends', async (req, res) => {
 // Apply the /api prefix to all routes
 app.use('/api', apiRouter);
 
+// Global error handler (Express 5 async error support)
+app.use((err, req, res, next) => {
+  console.error(`[ERROR] ${req.method} ${req.url}:`, err.message);
+  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+});
+
 // MongoDB connection + server start
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -220,14 +244,21 @@ if (!MONGO_URI) {
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log("MongoDB connected ✅");
-    if (process.env.NODE_ENV !== 'production') {
+    
+    // Only listen if not running as a Vercel serverless function
+    if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
       const PORT = process.env.PORT || 8000;
-      app.listen(PORT, () => {
+      app.listen(PORT, (err) => {
+        if (err) {
+          console.error("Failed to start server ❌", err);
+          return;
+        }
         console.log(`Server running on port ${PORT} 🚀`);
       });
     }
   })
   .catch(err => {
     console.error("MongoDB connection error ❌", err);
+    process.exit(1);
   });
 module.exports = app;
