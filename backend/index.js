@@ -19,14 +19,19 @@ const pusher = new Pusher({
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  process.env.CLIENT_URL,
+  process.env.CLIENT_URL ? process.env.CLIENT_URL.trim() : null
 ].filter(Boolean);
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (curl, Postman, server-to-server)
     if (!origin) return callback(null, true);
+    // Allow exact configured origins
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Dynamically allow ALL Vercel domains (fixes preview branches & strict CORS errors)
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    
+    console.error(`[CORS Blocked] Header Origin: '${origin}' | Allowed:`, allowedOrigins);
     callback(new Error(`CORS: origin '${origin}' not allowed`));
   },
   credentials: true
