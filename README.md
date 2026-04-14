@@ -103,14 +103,14 @@ This repository is optimized for **Split Deployments**. You must create two sepa
 - Create a new project in Vercel.
 - Select this repository and set the **Root Directory** to `backend`.
 - Ensure the **Framework** is set to `Other` or `Node.js`.
-- Add all backend `.env` variables. *Set `CLIENT_URL` to your Vercel Frontend URL (e.g., `https://frontend.vercel.app`).*
+- Add all backend `.env` variables. *Set `CLIENT_URL` to your Vercel Frontend URL (`https://task-manager-frontend-tau-sooty.vercel.app`).*
 - Deploy. (The included `backend/vercel.json` will automatically configure the Express serverless function).
 
 ### 2. Deploy the Frontend
 - Create a second project in Vercel.
 - Select this repository and set the **Root Directory** to `frontend`.
 - Vercel will automatically detect `Next.js`. Ensure the output directory is `.next`.
-- Add frontend `.env` variables. *Set `NEXT_PUBLIC_API_URL` to your Vercel Backend URL (e.g., `https://backend.vercel.app/api`).*
+- Add frontend `.env` variables. *Set `NEXT_PUBLIC_API_URL` to your Vercel Backend URL (`https://task-manager-backend-five-xi.vercel.app`).*
 - Deploy.
 
 ---
